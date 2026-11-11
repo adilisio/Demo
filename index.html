@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SALTGLASS - A post-atomic radio adventure</title>
+<meta name="description" content="A text adventure about a lighthouse radio, a dead count, and a salt flat that remembers the war.">
+<style>
+  :root {
+    --bg: #070400;
+    --bg-panel: #120b00;
+    --fg: #ffb000;
+    --fg-hi: #ffd98a;
+    --fg-dim: #9a6a00;
+    --fg-faint: #5c3f00;
+    --line: #4a3200;
+    --glow: 0 0 6px rgba(255, 176, 0, 0.55), 0 0 16px rgba(255, 140, 0, 0.25);
+    --font: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
+  }
+  :root[data-theme="light"] { --bg: #070400; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #070400; --fg: #ffb000; }
+  }
+  :root[data-theme="dark"] { --bg: #070400; --fg: #ffb000; }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font);
+    font-size: 17px;
+    line-height: 1.55;
+    color-scheme: dark;
+    overflow-x: hidden;
+  }
+  body {
+    background:
+      radial-gradient(ellipse at 50% 35%, #1c1100 0%, #070400 72%) fixed,
+      var(--bg);
+  }
+  /* scanlines and a faint vignette over everything */
+  body::before, body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 10;
+  }
+  body::before {
+    background: repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0, rgba(0,0,0,0) 2px, rgba(0,0,0,0.28) 3px, rgba(0,0,0,0) 4px);
+    opacity: 0.6;
+  }
+  body::after {
+    background: radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,0.6) 100%);
+  }
+
+  .crt {
+    position: relative;
+    z-index: 1;
+    max-width: 46rem;
+    margin: 0 auto;
+    padding: 16px;
+    min-height: 100vh;
+    animation: flicker 7s infinite steps(1, end);
+  }
+  @keyframes flicker {
+    0%, 100% { opacity: 1; }
+    91% { opacity: 0.96; }
+    92% { opacity: 1; }
+    95% { opacity: 0.985; }
+  }
+
+  h1, h2, h3 {
+    font-weight: normal;
+    color: var(--fg-hi);
+    text-shadow: var(--glow);
+    margin: 0;
+  }
+  h2 { font-size: 1.3rem; letter-spacing: 0.06em; margin: 0.6em 0 0.4em; }
+  h3 { font-size: 1rem; letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 0.4em; color: var(--fg-dim); text-shadow: none; }
+
+  .glow { text-shadow: var(--glow); }
+  .dim { color: var(--fg-dim); }
+  .small { font-size: 0.9rem; }
+
+  button {
+    font: inherit;
+    color: var(--fg);
+    background: transparent;
+    border: 1px solid var(--fg-dim);
+    padding: 12px 14px;
+    min-height: 48px;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    text-shadow: var(--glow);
+    border-radius: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+  button:hover:not(:disabled), button:focus-visible {
+    background: rgba(255, 176, 0, 0.12);
+    border-color: var(--fg-hi);
+    outline: 2px solid var(--fg-hi);
+    outline-offset: 2px;
+  }
+  button:disabled {
+    color: var(--fg-faint);
+    border-color: var(--fg-faint);
+    text-shadow: none;
+    cursor: not-allowed;
+  }
+  .btn-row { display: grid; gap: 10px; margin-top: 14px; }
+  .btn-row.two { grid-template-columns: 1fr 1fr; }
+  @media (max-width: 480px) { .btn-row.two { grid-template-columns: 1fr; } }
+
+  /* ----- title screen ----- */
+  #title { padding-top: 4vh; }
+  .title-art {
+    margin: 0 0 6px;
+    font-size: clamp(6px, 2.5vw, 14px);
+    line-height: 1.12;
+    color: var(--fg-hi);
+    text-shadow: var(--glow);
+    white-space: pre;
+    overflow: hidden;
+  }
+  #title-art-sub { letter-spacing: 0.22em; color: var(--fg-dim); margin-bottom: 1.4em; font-size: 0.95rem; }
+  .blurb { margin: 1.2em 0; }
+  #endings-count { margin-top: 0.8em; }
+
+  /* ----- status bar ----- */
+  .hud {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+    border: 1px solid var(--line);
+    background: var(--bg-panel);
+    padding: 8px 10px;
+    font-size: 0.95rem;
+    text-shadow: var(--glow);
+  }
+  .hud span { white-space: nowrap; }
+
+  /* ----- scene ----- */
+  .scene { margin-top: 14px; }
+  #roll {
+    min-height: 1.4em;
+    color: var(--fg-dim);
+    font-size: 0.95rem;
+    margin-bottom: 4px;
+  }
+  #text {
+    min-height: 8em;
+    cursor: pointer;
+  }
+  #text p { margin: 0 0 1em; font-size: 1.04rem; }
+  #ending-banner {
+    border: 1px solid var(--fg-hi);
+    padding: 8px 10px;
+    color: var(--fg-hi);
+    text-shadow: var(--glow);
+    margin-bottom: 12px;
+    font-size: 0.95rem;
+  }
+
+  /* ----- choices ----- */
+  #choices { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 10px; }
+  #choices li { margin: 0; }
+  .choice { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+  .choice .key { color: var(--fg-dim); min-width: 1.2em; }
+  .choice .tag { color: var(--fg-hi); white-space: nowrap; }
+  .choice .label { flex: 1 1 14rem; }
+  .choice .why { display: block; width: 100%; color: var(--fg-faint); font-size: 0.88rem; text-shadow: none; }
+  .choice.locked .label { color: var(--fg-faint); }
+
+  .controls { display: flex; gap: 10px; margin-top: 18px; }
+  .controls button { width: auto; flex: 1; text-align: center; font-size: 0.95rem; min-height: 44px; }
+
+  .hint { color: var(--fg-faint); font-size: 0.85rem; margin-top: 10px; }
+
+  /* ----- journal panel ----- */
+  #journal {
+    position: fixed;
+    z-index: 20;
+    top: 0; right: 0; bottom: 0;
+    width: min(26rem, 100vw);
+    background: #0c0700;
+    border-left: 1px solid var(--line);
+    padding: 16px;
+    overflow-y: auto;
+    box-shadow: -10px 0 30px rgba(0,0,0,0.6);
+  }
+  #journal[hidden] { display: none; }
+  #journal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  #journal-head button { width: auto; min-height: 40px; padding: 6px 12px; }
+  .jsec { border-top: 1px solid var(--line); padding: 10px 0; }
+  .jsec p { margin: 0 0 0.3em; font-size: 0.97rem; }
+
+  #fatal { color: var(--fg-hi); padding: 2rem 0; }
+  [hidden] { display: none !important; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .crt { animation: none; }
+    * { transition: none !important; animation: none !important; }
+  }
+  @media (max-width: 480px) {
+    body { font-size: 16px; }
+    .crt { padding: 14px 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="crt">
+
+  <section id="title" hidden>
+    <pre class="title-art" aria-label="SALTGLASS">
+ ____    _    _     _____     ____ _        _    ____ ____
+/ ___|  / \  | |   |_   _|   / ___| |      / \  / ___/ ___|
+\___ \ / _ \ | |     | |    | |  _| |     / _ \ \___ \___ \
+ ___) / ___ \| |___  | |    | |_| | |___ / ___ \ ___) |__) |
+|____/_/   \_\_____| |_|     \____|_____/_/   \_\____/____/
+    </pre>
+    <div id="title-art-sub"></div>
+    <p class="blurb">Lantern Station is a shortwave relay in a dead lighthouse on the old shoreline. The numbers station called the Metronome has counted the same slow sequence for one hundred and thirty-one years. Tonight it stopped counting, and a voice said your name.</p>
+    <div class="btn-row two">
+      <button id="btn-new" type="button">New Game</button>
+      <button id="btn-continue" type="button" disabled>Continue</button>
+    </div>
+    <p id="endings-count" class="dim small"></p>
+    <p class="hint">Keys 1 to 9 choose. J opens the journal. Click or press any key while text is typing to finish it.</p>
+  </section>
+
+  <section id="game" class="scene" hidden>
+    <div class="hud" role="status" aria-live="off">
+      <span id="hud-hp">HP</span>
+      <span id="hud-glow">GLOW</span>
+      <span id="hud-scrip">SCRIP</span>
+      <span id="hud-stats">STATS</span>
+    </div>
+
+    <h2 id="scene-title"></h2>
+    <div id="roll"></div>
+    <div id="ending-banner" hidden></div>
+    <div id="text" aria-live="polite"></div>
+    <ol id="choices" aria-label="Choices"></ol>
+
+    <div class="controls">
+      <button id="btn-journal" type="button">Journal (J)</button>
+      <button id="btn-menu" type="button">Menu</button>
+    </div>
+  </section>
+
+  <aside id="journal" hidden aria-label="Journal">
+    <div id="journal-head">
+      <h2>Journal</h2>
+      <button id="btn-journal-close" type="button">Close (Esc)</button>
+    </div>
+    <div id="journal-body"></div>
+  </aside>
+
+  <section id="fatal" hidden>
+    <h2>SALTGLASS could not load its story.</h2>
+    <p>Keep story.js and engine.js in the same folder as index.html, then reload.</p>
+  </section>
+
+  <noscript><p>SALTGLASS needs JavaScript to run.</p></noscript>
+</div>
+
+<script src="story.js"></script>
+<script src="engine.js"></script>
+</body>
+</html>
